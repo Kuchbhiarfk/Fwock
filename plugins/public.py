@@ -9,7 +9,10 @@ from pyrogram.errors import FloodWait
 from pyrogram.errors.exceptions.not_acceptable_406 import ChannelPrivate as PrivateChat
 from pyrogram.errors.exceptions.bad_request_400 import ChannelInvalid, ChatAdminRequired, UsernameInvalid, UsernameNotModified, ChannelPrivate
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
- 
+
+# Import clean_caption function from settings
+from .settings import clean_caption, get_configs
+
 #===================Run Function===================#
 
 @Client.on_message(filters.private & filters.command(["fwd", "forward"]))
@@ -19,10 +22,10 @@ async def run(bot, message):
     user_id = message.from_user.id
     _bot = await db.get_bot(user_id)
     if not _bot:
-      return await message.reply("<code>You didn't added any bot. Please add a bot using /settings !</code>")
+      return await message.reply("<code>You didn't add any bot. Please add a bot using /settings!</code>")
     channels = await db.get_user_channels(user_id)
     if not channels:
-       return await message.reply_text("please set a to channel in /settings before forwarding")
+       return await message.reply_text("Please set a target channel in /settings before forwarding")
     if len(channels) > 1:
        for channel in channels:
           buttons.append([KeyboardButton(f"{channel['title']}")])
@@ -34,7 +37,7 @@ async def run(bot, message):
        to_title = _toid.text
        toid = btn_data.get(to_title)
        if not toid:
-          return await message.reply_text("wrong channel choosen !", reply_markup=ReplyKeyboardRemove())
+          return await message.reply_text("Wrong channel chosen!", reply_markup=ReplyKeyboardRemove())
     else:
        toid = channels[0]['chat_id']
        to_title = channels[0]['title']
@@ -51,22 +54,20 @@ async def run(bot, message):
         last_msg_id = int(match.group(5))
         if chat_id.isnumeric():
             chat_id  = int(("-100" + chat_id))
-    elif fromid.forward_from_chat.type in [enums.ChatType.CHANNEL]:
+    elif fromid.forward_from_chat and fromid.forward_from_chat.type in [enums.ChatType.CHANNEL]:
         last_msg_id = fromid.forward_from_message_id
         chat_id = fromid.forward_from_chat.username or fromid.forward_from_chat.id
         if last_msg_id == None:
-           return await message.reply_text("**This may be a forwarded message from a group and sended by anonymous admin. instead of this please send last message link from group**")
+           return await message.reply_text("**This may be a forwarded message from a group sent by anonymous admin. Instead, please send the last message link from the group**")
     else:
-        await message.reply_text("**invalid !**")
+        await message.reply_text("**Invalid!**")
         return 
     try:
         title = (await bot.get_chat(chat_id)).title
-  #  except ChannelInvalid:
-        #return await fromid.reply("**Given source chat is copyrighted channel/group. you can't forward messages from there**")
     except (PrivateChat, ChannelPrivate, ChannelInvalid):
         title = "private" if fromid.text else fromid.forward_from_chat.title
     except (UsernameInvalid, UsernameNotModified):
-        return await message.reply('Invalid Link specified.')
+        return await message.reply('Invalid link specified.')
     except Exception as e:
         return await message.reply(f'Errors - {e}')
     skipno = await bot.ask(message.chat.id, Translation.SKIP_MSG)
@@ -84,4 +85,4 @@ async def run(bot, message):
         disable_web_page_preview=True,
         reply_markup=reply_markup
     )
-    STS(forward_id).store(chat_id, toid, int(skipno.text), int(last_msg_id))
+    STS(forward_id).store(chat_id, toid, int(skipno.text), int(last_msg_id))                
