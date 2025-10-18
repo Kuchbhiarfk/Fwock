@@ -34,9 +34,9 @@ async def clean_caption(original_caption, user_id):
             cleaned = cleaned.replace(text, "")
     
     # Clean up extra spaces and newlines
-    cleaned = re.sub(r'\n\s*\n+', '\n\n', cleaned)  # Multiple newlines to double
-    cleaned = re.sub(r' +', ' ', cleaned)  # Multiple spaces to single
-    cleaned = cleaned.strip()  # Remove leading/trailing whitespace
+    cleaned = re.sub(r'\n\s*\n+', '\n\n', cleaned)
+    cleaned = re.sub(r' +', ' ', cleaned)
+    cleaned = cleaned.strip()
     
     return cleaned
 
@@ -189,7 +189,7 @@ async def settings_query(bot, query):
      buttons.append([InlineKeyboardButton('━━━━━━━━━━━━━━━', callback_data="settings#none")])
      
      # Auto-Remove Texts Section
-     if remove_texts:
+     if remove_texts and len(remove_texts) > 0:
         buttons.append([
             InlineKeyboardButton(f'✂️ Remove Texts ({len(remove_texts)})', callback_data="settings#manageremove")
         ])
@@ -202,12 +202,12 @@ async def settings_query(bot, query):
      
      # Build info message
      caption_info = "Not Set" if caption is None else "✅ Active"
-     remove_info = f"🔴 {len(remove_texts)} texts auto-removing" if remove_texts else "No auto-remove"
+     remove_info = f"🔴 {len(remove_texts)} texts auto-removing" if remove_texts and len(remove_texts) > 0 else "No auto-remove"
      
      # Show current remove texts if exists
      remove_list = ""
-     if remove_texts:
-         remove_list = "\n\n<b><u>🔴 AUTO-REMOVING TEXTS:</b></u>\n"
+     if remove_texts and len(remove_texts) > 0:
+         remove_list = "\n\n<b><u>🔴 AUTO-REMOVING TEXTS:</u></b>\n"
          for idx, txt in enumerate(remove_texts[:3], 1):
              preview = txt[:40] + "..." if len(txt) > 40 else txt
              remove_list += f"{idx}. <code>{preview}</code>\n"
@@ -215,14 +215,14 @@ async def settings_query(bot, query):
              remove_list += f"<i>...and {len(remove_texts) - 3} more</i>"
      
      await query.message.edit_text(
-        f"<b><u>🖋️ CAPTION SETTINGS</b></u>\n\n"
+        f"<b><u>🖋️ CAPTION SETTINGS</u></b>\n\n"
         f"<b>📝 Custom Caption:</b> {caption_info}\n"
         f"<b>✂️ Auto-Remove:</b> {remove_info}\n\n"
-        f"<b><u>HOW IT WORKS:</b></u>\n"
+        f"<b><u>HOW IT WORKS:</u></b>\n"
         f"1️⃣ Bot gets original caption from file\n"
         f"2️⃣ Removes all unwanted texts automatically\n"
         f"3️⃣ Applies your custom caption with cleaned {{caption}}\n\n"
-        f"<b><u>AVAILABLE VARIABLES:</b></u>\n"
+        f"<b><u>AVAILABLE VARIABLES:</u></b>\n"
         f"• <code>{{filename}}</code> - File name\n"
         f"• <code>{{size}}</code> - File size\n"
         f"• <code>{{caption}}</code> - Cleaned original caption{remove_list}",
@@ -265,9 +265,9 @@ async def settings_query(bot, query):
                  reply_markup=InlineKeyboardMarkup(buttons)
              )
          
-         # Get existing remove texts
-         data = await get_configs(user_id)
-         existing_texts = data.get('remove_texts', [])
+         # Get current configs
+         current_configs = await get_configs(user_id)
+         existing_texts = current_configs.get('remove_texts', [])
          
          added_count = 0
          # Add new texts (avoid duplicates)
@@ -277,7 +277,10 @@ async def settings_query(bot, query):
                  existing_texts.append(clean_match)
                  added_count += 1
          
+         # Update the entire configs with new remove_texts
+         current_configs['remove_texts'] = existing_texts
          await update_configs(user_id, 'remove_texts', existing_texts)
+         
          await remove_input.delete()
          
          preview_texts = "\n".join([f"• <code>{t[:50]}{'...' if len(t) > 50 else ''}</code>" for t in matches[:5]])
@@ -304,8 +307,15 @@ async def settings_query(bot, query):
      data = await get_configs(user_id)
      remove_texts = data.get('remove_texts', [])
      
-     if not remove_texts:
-         return await query.answer("No texts to manage!", show_alert=True)
+     if not remove_texts or len(remove_texts) == 0:
+         await query.answer("No texts to manage!", show_alert=True)
+         return await query.message.edit_text(
+             "<b>✂️ NO REMOVE TEXTS</b>\n\n<b>Click below to add texts to auto-remove</b>",
+             reply_markup=InlineKeyboardMarkup([
+                 [InlineKeyboardButton('✂️ Add Remove Texts', callback_data="settings#addremove")],
+                 [InlineKeyboardButton('↩ Back', callback_data="settings#caption")]
+             ])
+         )
      
      # Show preview of each text (truncated if too long)
      text_list = "\n".join([f"{i+1}. <code>{t[:60]}{'...' if len(t) > 60 else ''}</code>" for i, t in enumerate(remove_texts)])
@@ -318,7 +328,7 @@ async def settings_query(bot, query):
      ]
      
      await query.message.edit_text(
-         f"<b><u>✂️ AUTO-REMOVE TEXTS</b></u>\n\n"
+         f"<b><u>✂️ AUTO-REMOVE TEXTS</u></b>\n\n"
          f"<b>These texts will be automatically removed from captions:</b>\n\n"
          f"{text_list}\n\n"
          f"<b>Total: {len(remove_texts)}</b>",
@@ -379,11 +389,11 @@ async def settings_query(bot, query):
      ]
      
      remove_info = ""
-     if remove_texts:
+     if remove_texts and len(remove_texts) > 0:
          remove_info = f"\n\n<b>🔴 Auto-removing {len(remove_texts)} texts from {{caption}}</b>"
      
      await query.message.edit_text(
-        f"<b><u>👁 YOUR CUSTOM CAPTION</b></u>\n\n<code>{data['caption']}</code>{remove_info}",
+        f"<b><u>👁 YOUR CUSTOM CAPTION</u></b>\n\n<code>{data['caption']}</code>{remove_info}",
         reply_markup=InlineKeyboardMarkup(buttons))
     
   elif type=="deletecaption":
@@ -444,7 +454,7 @@ async def settings_query(bot, query):
      buttons.append([InlineKeyboardButton('↩ Back', 
                       callback_data="settings#main")])
      await query.message.edit_text(
-        "<b><u>⏹ CUSTOM BUTTON</b></u>\n\n<b>Set inline buttons for messages</b>\n\n<b>FORMAT:</b>\n<code>[Button Text][buttonurl:https://t.me/example]</code>",
+        "<b><u>⏹ CUSTOM BUTTON</u></b>\n\n<b>Set inline buttons for messages</b>\n\n<b>FORMAT:</b>\n<code>[Button Text][buttonurl:https://t.me/example]</code>",
         reply_markup=InlineKeyboardMarkup(buttons))
   
   elif type=="addbutton":
@@ -533,7 +543,7 @@ async def settings_query(bot, query):
       
   elif type=="filters":
      await query.message.edit_text(
-        "<b><u>💠 FILTERS</b></u>\n\n<b>Configure message types to forward</b>",
+        "<b><u>💠 FILTERS</u></b>\n\n<b>Configure message types to forward</b>",
         reply_markup=await filters_buttons(user_id))
   
   elif type=="nextfilters":
@@ -557,7 +567,7 @@ async def settings_query(bot, query):
     size = settings.get('file_size', 0)
     i, limit = size_limit(settings['size_limit'])
     await query.message.edit_text(
-       f'<b><u>📊 SIZE LIMIT</b></u>\n\n<b>Files {limit} {size} MB will forward</b>',
+       f'<b><u>📊 SIZE LIMIT</u></b>\n\n<b>Files {limit} {size} MB will forward</b>',
        reply_markup=size_button(size))
   
   elif type.startswith("update_size"):
@@ -567,7 +577,7 @@ async def settings_query(bot, query):
     await update_configs(user_id, 'file_size', size)
     i, limit = size_limit((await get_configs(user_id))['size_limit'])
     await query.message.edit_text(
-       f'<b><u>📊 SIZE LIMIT</b></u>\n\n<b>Files {limit} {size} MB will forward</b>',
+       f'<b><u>📊 SIZE LIMIT</u></b>\n\n<b>Files {limit} {size} MB will forward</b>',
        reply_markup=size_button(size))
   
   elif type.startswith('update_limit'):
@@ -575,7 +585,7 @@ async def settings_query(bot, query):
     limit, sts = size_limit(limit)
     await update_configs(user_id, 'size_limit', limit) 
     await query.message.edit_text(
-       f'<b><u>📊 SIZE LIMIT</b></u>\n\n<b>Files {sts} {size} MB will forward</b>',
+       f'<b><u>📊 SIZE LIMIT</u></b>\n\n<b>Files {sts} {size} MB will forward</b>',
        reply_markup=size_button(int(size)))
       
   elif type == "add_extension":
@@ -640,7 +650,7 @@ async def settings_query(bot, query):
     btn.append([InlineKeyboardButton('🗑️ Clear', 'settings#rmve_all_keyword')])
     btn.append([InlineKeyboardButton('↩ Back', 'settings#main')])
     await query.message.edit_text(
-        text='<b><u>♦️ KEYWORDS</b></u>\n\n<b>Files with these will forward</b>',
+        text='<b><u>♦️ KEYWORDS</u></b>\n\n<b>Files with these will forward</b>',
         reply_markup=InlineKeyboardMarkup(btn))
       
   elif type == "rmve_all_keyword":
@@ -829,3 +839,4 @@ async def next_filters_buttons(user_id):
                     callback_data="settings#main")
        ]]
   return InlineKeyboardMarkup(buttons)
+
