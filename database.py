@@ -1,4 +1,3 @@
-# bot developer @mr_jisshu
 from os import environ 
 from config import Config
 import motor.motor_asyncio
@@ -87,6 +86,7 @@ class Database:
     async def get_configs(self, id):
         default = {
             'caption': None,
+            'remove_texts': [],  # ✅ ADDED THIS
             'duplicate': True,
             'forward_tag': False,
             'file_size': 0,
@@ -110,7 +110,11 @@ class Database:
         }
         user = await self.col.find_one({'id':int(id)})
         if user:
-            return user.get('configs', default)
+            user_config = user.get('configs', default)
+            # Ensure remove_texts exists in old configs
+            if 'remove_texts' not in user_config:
+                user_config['remove_texts'] = []
+            return user_config
         return default 
        
     async def add_bot(self, datas):
@@ -170,3 +174,5 @@ class Database:
        return self.nfy.find({})
      
 db = Database(Config.DATABASE_URI, Config.DATABASE_NAME)
+
+
